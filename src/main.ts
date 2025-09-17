@@ -586,8 +586,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
     
-    // Check if there's a dawproject file in the current directory we can load
-    checkForLocalFile();
+    // Auto-load local file only in development
+    if (import.meta.env.DEV) {
+      checkForLocalFile();
+    }
   }
 });
 
