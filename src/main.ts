@@ -639,7 +639,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function checkForLocalFile() {
   try {
-    const response = await fetch("/Joanna's Theme analysis.dawproject");
+    const response = await fetch("./Joanna's Theme analysis.dawproject");
     if (response.ok) {
       const blob = await response.blob();
       const file = new File([blob], "Joanna's Theme analysis.dawproject");
