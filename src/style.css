@@ -37,13 +37,23 @@ h1 {
 
 .container {
   text-align: left;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#scene-container {
+  flex: 1;
 }
 
 .file-input-container {
-  margin: 2rem 0;
+  margin-top: auto;
+  padding: 2rem 0;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 input[type="file"] {
@@ -84,12 +94,64 @@ input[type="file"] {
 .scene-header {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 2rem;
   margin: 2rem 0;
   padding: 1rem;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 12px;
+}
+
+.scene-info {
+  flex: 1;
+  text-align: center;
+}
+
+.scene-info h2 {
+  margin: 0 0 0.5rem 0;
+}
+
+.scene-info p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9em;
+}
+
+.mode-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.mode-btn {
+  padding: 0.6em 1.2em;
+  font-size: 0.9em;
+  border: 2px solid;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-weight: 600;
+}
+
+.mode-btn.scene {
+  background: rgba(100, 108, 255, 0.1);
+  border-color: #646cff;
+  color: #646cff;
+}
+
+.mode-btn.scene:hover {
+  background: rgba(100, 108, 255, 0.2);
+  transform: scale(1.05);
+}
+
+.mode-btn.auto {
+  background: rgba(76, 175, 80, 0.1);
+  border-color: #4caf50;
+  color: #4caf50;
+}
+
+.mode-btn.auto:hover {
+  background: rgba(76, 175, 80, 0.2);
+  transform: scale(1.05);
 }
 
 .nav-arrow {
@@ -247,7 +309,7 @@ input[type="file"] {
 .large-keyboard {
   position: relative;
   height: 150px;
-  width: 420px;
+  width: 700px; /* Stretched wider for better spacing */
   margin: 0 auto;
 }
 
@@ -281,10 +343,10 @@ input[type="file"] {
 
 .black-key {
   position: absolute;
-  width: 40px;
+  width: 35px; /* Default for two octave mode */
   height: 100%;
   background: #333;
-  border: 2px solid #111;
+  border: 1px solid white;
   border-radius: 0 0 4px 4px;
   display: flex;
   align-items: flex-end;
@@ -296,15 +358,15 @@ input[type="file"] {
 }
 
 .white-key.active {
-  background: linear-gradient(to bottom, #646cff, #535bf2);
-  border-color: #4444ff;
-  transform: translateY(2px);
+  background: deeppink;
+  border-color: #c1185b;
+  /* No transform - don't bump down */
 }
 
 .black-key.active {
-  background: linear-gradient(to bottom, #8888ff, #646cff);
-  border-color: #535bf2;
-  transform: translateY(2px);
+  background: deeppink;
+  border-color: white;
+  /* No transform - don't bump down */
 }
 
 .key-label {

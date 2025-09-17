@@ -195,7 +195,7 @@ export class DAWProjectParser {
           const duration = parseFloat(clipEl.getAttribute('duration') || '0');
           const playStart = parseFloat(clipEl.getAttribute('playStart') || '0');
           const loopStart = parseFloat(clipEl.getAttribute('loopStart') || '0');
-          const loopEnd = parseFloat(clipEl.getAttribute('loopEnd') || duration);
+          const loopEnd = parseFloat(clipEl.getAttribute('loopEnd') || duration.toString());
           
           // Extract notes if present
           const notes = this.extractNotes(clipEl);

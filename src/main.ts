@@ -1,17 +1,75 @@
 import './style.css';
 import { DAWProjectParser } from './dawproject-parser';
-import type { Track } from './dawproject-parser';
 import { PitchClassSetAnalyzer } from './pitch-class-set';
 import { SceneManager } from './scene-manager';
 import type { Scene } from './scene-manager';
 import { AudioPlayer } from './audio-player';
+import { eventSystem } from './event-system';
+import type { AppState } from './event-system';
 import JSZip from 'jszip';
 
 const parser = new DAWProjectParser();
 const audioPlayer = new AudioPlayer();
 let sceneManager: SceneManager | null = null;
-let currentSceneIndex = 1;
 let projectZip: JSZip | null = null;
+
+// Audio loading state to prevent overlaps
+let currentAudioRequestId: string | null = null;
+let isAudioLoading: boolean = false;
+
+// Navigation debouncing to prevent double clicks
+let navigationInProgress: boolean = false;
+
+// Keyboard octave toggle
+let showTwoOctaves: boolean = true;
+
+// Register effect handlers for the event system
+eventSystem.registerEffectHandler('UPDATE_UI', (_, state) => {
+  updateUI(state);
+});
+
+eventSystem.registerEffectHandler('LOAD_SCENE_AUDIO', (effect, state) => {
+  if (effect.type === 'LOAD_SCENE_AUDIO') {
+    const scene = sceneManager?.getScene(effect.sceneIndex);
+  if (scene) {
+    // Generate new request ID and cancel previous
+    const requestId = Math.random().toString(36).substr(2, 9);
+    currentAudioRequestId = requestId;
+    console.log(`Starting new audio request ${requestId} for scene ${effect.sceneIndex}`);
+    
+    // If we're already loading, cancel the current request and start new one
+    if (isAudioLoading) {
+      console.log('Audio already loading, will be cancelled by new request');
+    }
+    
+    setTimeout(() => {
+      if (currentAudioRequestId === requestId) {
+        loadSceneAudio(scene, state, requestId);
+      } else {
+        console.log(`Audio request ${requestId} cancelled before execution`);
+      }
+    }, 100); // Reduced delay
+  }
+  }
+});
+
+eventSystem.registerEffectHandler('STOP_AUDIO', async (_, _state) => {
+  console.log('Stopping audio via effect system');
+  await audioPlayer.stop();
+  // Don't cancel pending requests here - let them be managed by LOAD_SCENE_AUDIO
+  // Don't dispatch AUDIO_STOPPED here - let the loadSceneAudio function handle it
+});
+
+eventSystem.registerEffectHandler('ADVANCE_SCENE', (_, state) => {
+  // This is already handled by the AUTO_ADVANCE event in the reducer
+  // Just update the UI
+  updateUI(state);
+});
+
+// Subscribe to state changes for debugging
+eventSystem.subscribe((state) => {
+  console.log('State updated:', state);
+});
 
 async function loadDAWProject(file: File) {
   try {
@@ -22,9 +80,11 @@ async function loadDAWProject(file: File) {
     // Initialize scene manager with tracks and scenes
     sceneManager = new SceneManager(project.tracks, project.scenes);
     
-    // Start with first scene
-    currentSceneIndex = 1;
-    displaySceneView();
+    // Dispatch project loaded event
+    eventSystem.dispatch({ 
+      type: 'PROJECT_LOADED', 
+      totalScenes: sceneManager.getTotalScenes() 
+    });
     
   } catch (error) {
     console.error('Error loading DAWproject:', error);
@@ -32,37 +92,91 @@ async function loadDAWProject(file: File) {
   }
 }
 
-function displaySceneView() {
+function updateUI(state: AppState) {
+  const container = document.getElementById('scene-container');
+  if (!container || !sceneManager || !state.projectLoaded) return;
+  
+  const scene = sceneManager.getScene(state.currentSceneIndex);
+  if (!scene) return;
+  
+  // Check if we need to completely rebuild the scene view
+  const existingHeader = container.querySelector('.scene-header');
+  const existingContent = container.querySelector('.scene-content');
+  
+  if (!existingHeader || !existingContent) {
+    // Full rebuild
+    displaySceneView(state);
+  } else {
+    // Update header and content - content contains pitch class analysis
+    updateSceneHeader(state);
+    updateSceneContent(scene, state);
+    updatePlayPauseButton(state);
+  }
+}
+
+function displaySceneView(state: AppState) {
   const container = document.getElementById('scene-container');
   if (!container || !sceneManager) return;
   
-  const scene = sceneManager.getScene(currentSceneIndex);
+  const scene = sceneManager.getScene(state.currentSceneIndex);
   if (!scene) return;
   
   container.innerHTML = '';
   
   // Create scene header with navigation
-  const header = createSceneHeader(scene, sceneManager.getTotalScenes());
+  const header = createSceneHeader(scene, state);
   container.appendChild(header);
   
   // Create main scene content
-  const content = createSceneContent(scene);
+  const content = createSceneContent(scene, state);
   container.appendChild(content);
-  
-  // Load and play audio if available
-  loadSceneAudio(scene);
 }
 
-function createSceneHeader(scene: Scene, totalScenes: number): HTMLElement {
+function updateSceneHeader(state: AppState) {
+  const container = document.getElementById('scene-container');
+  if (!container || !sceneManager) return;
+  
+  const scene = sceneManager.getScene(state.currentSceneIndex);
+  if (!scene) return;
+  
+  // Only update the header, don't touch content or audio
+  const existingHeader = container.querySelector('.scene-header');
+  if (existingHeader) {
+    const newHeader = createSceneHeader(scene, state);
+    existingHeader.replaceWith(newHeader);
+  }
+}
+
+function updateSceneContent(scene: Scene, state: AppState) {
+  const container = document.getElementById('scene-container');
+  if (!container) return;
+  
+  // Update the existing scene content with new scene data
+  const existingContent = container.querySelector('.scene-content');
+  if (existingContent) {
+    const newContent = createSceneContent(scene, state);
+    existingContent.replaceWith(newContent);
+  }
+}
+
+function createSceneHeader(scene: Scene, state: AppState): HTMLElement {
   const header = document.createElement('div');
   header.className = 'scene-header';
   
   header.innerHTML = `
-    <button id="prev-scene" class="nav-arrow" ${currentSceneIndex <= 1 ? 'disabled' : ''}>
+    <button id="prev-scene" class="nav-arrow" ${state.currentSceneIndex <= 1 ? 'disabled' : ''}>
       ◀
     </button>
-    <h2>${scene.name} (${scene.index} of ${totalScenes})</h2>
-    <button id="next-scene" class="nav-arrow" ${currentSceneIndex >= totalScenes ? 'disabled' : ''}>
+    <div class="scene-info">
+      <h2>${scene.name}</h2>
+      <p>Scene ${scene.index} of ${state.totalScenes}</p>
+    </div>
+    <div class="mode-toggle">
+      <button id="mode-toggle" class="mode-btn ${state.isAutoMode ? 'auto' : 'scene'}">
+        ${state.isAutoMode ? '🔄 Auto Mode' : '🎵 Scene Mode'}
+      </button>
+    </div>
+    <button id="next-scene" class="nav-arrow" ${state.currentSceneIndex >= state.totalScenes ? 'disabled' : ''}>
       ▶
     </button>
   `;
@@ -70,14 +184,30 @@ function createSceneHeader(scene: Scene, totalScenes: number): HTMLElement {
   // Add navigation event listeners
   const prevBtn = header.querySelector('#prev-scene') as HTMLButtonElement;
   const nextBtn = header.querySelector('#next-scene') as HTMLButtonElement;
+  const modeToggleBtn = header.querySelector('#mode-toggle') as HTMLButtonElement;
   
-  prevBtn?.addEventListener('click', () => navigateScene(-1));
-  nextBtn?.addEventListener('click', () => navigateScene(1));
+  prevBtn?.addEventListener('click', () => {
+    if (!navigationInProgress) {
+      navigationInProgress = true;
+      console.log('Manual navigation: previous scene');
+      eventSystem.dispatch({ type: 'SCENE_NAVIGATE', direction: -1 });
+      setTimeout(() => { navigationInProgress = false; }, 300);
+    }
+  });
+  nextBtn?.addEventListener('click', () => {
+    if (!navigationInProgress) {
+      navigationInProgress = true;
+      console.log('Manual navigation: next scene');
+      eventSystem.dispatch({ type: 'SCENE_NAVIGATE', direction: 1 });
+      setTimeout(() => { navigationInProgress = false; }, 300);
+    }
+  });
+  modeToggleBtn?.addEventListener('click', () => eventSystem.dispatch({ type: 'MODE_TOGGLE' }));
   
   return header;
 }
 
-function createSceneContent(scene: Scene): HTMLElement {
+function createSceneContent(scene: Scene, state: AppState): HTMLElement {
   const content = document.createElement('div');
   content.className = 'scene-content';
   
@@ -94,8 +224,8 @@ function createSceneContent(scene: Scene): HTMLElement {
     referenceSection.className = 'reference-section';
     referenceSection.innerHTML = `
       <h3>Reference</h3>
-      <p class="clip-name">${scene.referenceClip.name || 'Untitled'}</p>
-      <p class="clip-timing">Duration: ${scene.referenceClip.duration.toFixed(2)} beats</p>
+      ${scene.referenceClip.name ? `<p class="clip-name">${scene.referenceClip.name}</p>` : ''}
+      <p class="clip-timing">Duration: ${scene.referenceClip.finalAudioEnd && scene.referenceClip.finalAudioStart ? (scene.referenceClip.finalAudioEnd - scene.referenceClip.finalAudioStart).toFixed(1) + 's' : scene.referenceClip.duration.toFixed(2) + ' beats'}</p>
       <div id="audio-status" class="audio-status">Loading audio...</div>
       <button id="play-pause-btn" class="play-pause-btn">⏸ Pause</button>
     `;
@@ -105,8 +235,8 @@ function createSceneContent(scene: Scene): HTMLElement {
     setTimeout(() => {
       const playPauseBtn = document.getElementById('play-pause-btn') as HTMLButtonElement;
       if (playPauseBtn) {
-        playPauseBtn.addEventListener('click', togglePlayPause);
-        updatePlayPauseButton();
+        playPauseBtn.addEventListener('click', () => eventSystem.dispatch({ type: 'PLAY_PAUSE' }));
+        updatePlayPauseButton(state);
       }
     }, 0);
   } else {
@@ -138,16 +268,39 @@ function createShapeAnalysis(scene: Scene): HTMLElement {
   
   section.innerHTML = `
     <h3>Shape Analysis</h3>
-    <p class="clip-name">${scene.shapeClip?.name || 'Untitled Shape'}</p>
+    ${scene.shapeClip?.name ? `<p class="clip-name">${scene.shapeClip.name}</p>` : ''}
+    <button id="octave-toggle" class="toggle-notes">
+      ${showTwoOctaves ? '2 Octaves' : '1 Octave'}
+    </button>
   `;
   
   // Create large keyboard visualization
   const keyboardContainer = document.createElement('div');
   keyboardContainer.className = 'keyboard-container';
+  keyboardContainer.id = 'keyboard-container'; // Give it an ID for updates
   
   const keyboard = createLargeKeyboard(pitchClasses);
   keyboardContainer.appendChild(keyboard);
   section.appendChild(keyboardContainer);
+  
+  // Add octave toggle functionality
+  setTimeout(() => {
+    const octaveToggle = document.getElementById('octave-toggle') as HTMLButtonElement;
+    if (octaveToggle) {
+      octaveToggle.addEventListener('click', () => {
+        showTwoOctaves = !showTwoOctaves;
+        octaveToggle.textContent = showTwoOctaves ? '2 Octaves' : '1 Octave';
+        
+        // Recreate the keyboard with new octave setting
+        const container = document.getElementById('keyboard-container');
+        if (container) {
+          container.innerHTML = '';
+          const newKeyboard = createLargeKeyboard(pitchClasses);
+          container.appendChild(newKeyboard);
+        }
+      });
+    }
+  }, 0);
   
   // Add pitch class set details
   const analysisDetails = document.createElement('div');
@@ -185,8 +338,52 @@ function createLargeKeyboard(activePitchClasses: number[]): HTMLElement {
   const keyboard = document.createElement('div');
   keyboard.className = 'large-keyboard';
   
-  const whiteKeys = [0, 2, 4, 5, 7, 9, 11]; // C, D, E, F, G, A, B
-  const blackKeys = [1, 3, 6, 8, 10]; // C#, D#, F#, G#, A#
+  let whiteKeys: number[];
+  let blackKeys: number[];
+  let totalWhiteKeys: number;
+  let blackKeyPositions: number[];
+  let blackKeyWidth: number;
+
+  if (showTwoOctaves) {
+    // Two octaves starting on F: F G A B C D E | F G A B C D E
+    whiteKeys = [5, 7, 9, 11, 0, 2, 4, 5, 7, 9, 11, 0, 2, 4]; // 14 white keys
+    blackKeys = [6, 8, 10, 1, 3, 6, 8, 10, 1, 3]; // 10 black keys (F# G# A# C# D# repeated)
+    totalWhiteKeys = 14;
+    blackKeyWidth = 35;
+
+    const keyUnit = 700 / totalWhiteKeys; // ~50px per white key
+    
+    // Position black keys carefully between white keys
+    blackKeyPositions = [
+      keyUnit * 1.0 - blackKeyWidth/2,   // F# (between F-G, 1st octave)
+      keyUnit * 2.0 - blackKeyWidth/2,   // G# (between G-A, 1st octave)
+      keyUnit * 3.0 - blackKeyWidth/2,   // A# (between A-B, 1st octave)
+      keyUnit * 5.0 - blackKeyWidth/2,   // C# (between C-D, 1st octave)
+      keyUnit * 6.0 - blackKeyWidth/2,   // D# (between D-E, 1st octave)
+      keyUnit * 8.0 - blackKeyWidth/2,   // F# (between F-G, 2nd octave)
+      keyUnit * 9.0 - blackKeyWidth/2,   // G# (between G-A, 2nd octave)
+      keyUnit * 10.0 - blackKeyWidth/2,  // A# (between A-B, 2nd octave)
+      keyUnit * 12.0 - blackKeyWidth/2,  // C# (between C-D, 2nd octave)
+      keyUnit * 13.0 - blackKeyWidth/2   // D# (between D-E, 2nd octave)
+    ];
+  } else {
+    // Single octave starting on C: C D E F G A B
+    whiteKeys = [0, 2, 4, 5, 7, 9, 11]; // 7 white keys
+    blackKeys = [1, 3, 6, 8, 10]; // 5 black keys (C# D# F# G# A#)
+    totalWhiteKeys = 7;
+    blackKeyWidth = 60;
+
+    const keyUnit = 700 / totalWhiteKeys; // ~100px per white key
+    
+    // Position black keys carefully between white keys for single octave
+    blackKeyPositions = [
+      keyUnit * 1.0 - blackKeyWidth/2,   // C# (between C-D)
+      keyUnit * 2.0 - blackKeyWidth/2,   // D# (between D-E)
+      keyUnit * 4.0 - blackKeyWidth/2,   // F# (between F-G)
+      keyUnit * 5.0 - blackKeyWidth/2,   // G# (between G-A)
+      keyUnit * 6.0 - blackKeyWidth/2    // A# (between A-B)
+    ];
+  }
   
   // Create white keys first
   const whiteKeysContainer = document.createElement('div');
@@ -197,10 +394,7 @@ function createLargeKeyboard(activePitchClasses: number[]): HTMLElement {
     key.className = `key white-key ${activePitchClasses.includes(pc) ? 'active' : ''}`;
     key.dataset.pitch = pc.toString();
     
-    const label = document.createElement('span');
-    label.className = 'key-label';
-    label.textContent = PitchClassSetAnalyzer.getPitchClassName(pc).replace(/[#/].*/, '');
-    key.appendChild(label);
+    // No labels needed - clean visual
     
     whiteKeysContainer.appendChild(key);
   });
@@ -209,20 +403,16 @@ function createLargeKeyboard(activePitchClasses: number[]): HTMLElement {
   const blackKeysContainer = document.createElement('div');
   blackKeysContainer.className = 'black-keys';
   
-  // Position black keys appropriately
-  const blackKeyPositions = [0.5, 1.5, 3.5, 4.5, 5.5]; // Positions between white keys
-  
   blackKeys.forEach((pc, index) => {
     const key = document.createElement('div');
     key.className = `key black-key ${activePitchClasses.includes(pc) ? 'active' : ''}`;
     key.dataset.pitch = pc.toString();
-    key.style.left = `${blackKeyPositions[index] * 60}px`; // 60px is white key width
-    
-    const label = document.createElement('span');
-    label.className = 'key-label';
-    label.textContent = PitchClassSetAnalyzer.getPitchClassName(pc).split('/')[0].replace(/[CD]/, '');
-    key.appendChild(label);
-    
+    key.style.left = `${blackKeyPositions[index]}px`;
+    key.style.top = '-3px'; // Shift black keys up slightly
+    key.style.width = `${showTwoOctaves ? 35 : 60}px`; // Dynamic width based on octave mode
+
+    // No labels needed - clean visual
+
     blackKeysContainer.appendChild(key);
   });
   
@@ -232,15 +422,25 @@ function createLargeKeyboard(activePitchClasses: number[]): HTMLElement {
   return keyboard;
 }
 
-async function loadSceneAudio(scene: Scene) {
+async function loadSceneAudio(scene: Scene, state: AppState, requestId?: string) {
   const audioStatus = document.getElementById('audio-status');
+  
+  // Check if this request is still current
+  if (requestId && currentAudioRequestId !== requestId) {
+    console.log(`Audio request ${requestId} cancelled - newer request started`);
+    return;
+  }
+  
+  isAudioLoading = true;
+  console.log(`Loading audio for scene ${scene.index} with request ${requestId}`);
   
   if (!scene.referenceClip || !scene.referenceClip.audioFile || !projectZip) {
     if (audioStatus) {
       audioStatus.textContent = 'No audio available';
       audioStatus.className = 'audio-status no-audio';
     }
-    audioPlayer.stop();
+    eventSystem.dispatch({ type: 'AUDIO_STOPPED' });
+    isAudioLoading = false;
     return;
   }
   
@@ -250,10 +450,22 @@ async function loadSceneAudio(scene: Scene) {
   }
   
   try {
+    // Check if cancelled before starting audio loading
+    if (requestId && currentAudioRequestId !== requestId) {
+      console.log(`Audio request ${requestId} cancelled before loading`);
+      return;
+    }
+    
     const audioBuffer = await audioPlayer.loadAudioFromZip(
       projectZip,
       scene.referenceClip.audioFile
     );
+    
+    // Check if cancelled after loading but before playing
+    if (requestId && currentAudioRequestId !== requestId) {
+      console.log(`Audio request ${requestId} cancelled after loading`);
+      return;
+    }
     
     if (audioBuffer) {
       // Use the calculated final timing
@@ -263,10 +475,27 @@ async function loadSceneAudio(scene: Scene) {
       console.log(`Scene ${scene.index}: Using calculated timing:`);
       console.log(`  - finalAudioStart=${startTime}s`);
       console.log(`  - finalAudioEnd=${endTime}s`);
-      console.log(`  - audioRegionStart=${scene.referenceClip.audioRegionStart}s`);
-      console.log(`  - loopStart=${scene.referenceClip.loopStart}, loopEnd=${scene.referenceClip.loopEnd}`);
       
-      await audioPlayer.playLoop(audioBuffer, startTime, endTime);
+      // Set the audio player mode based on current app mode
+      if (state.isAutoMode) {
+        audioPlayer.setLoopMode('once', () => {
+          // Double-check we're still in auto mode when callback fires
+          const currentState = eventSystem.getState();
+          if (currentState.isAutoMode && currentState.isPlaying && !navigationInProgress) {
+            console.log('Auto-advancing due to audio end');
+            navigationInProgress = true;
+            eventSystem.dispatch({ type: 'AUTO_ADVANCE' });
+            setTimeout(() => { navigationInProgress = false; }, 300);
+          } else {
+            console.log('Skipping auto-advance - mode changed, not playing, or navigation in progress');
+          }
+        });
+      } else {
+        audioPlayer.setLoopMode('loop');
+      }
+      
+      await audioPlayer.playSegment(audioBuffer, startTime, endTime);
+      eventSystem.dispatch({ type: 'AUDIO_STARTED' });
       
       if (audioStatus) {
         const regionText = startTime !== undefined && endTime !== undefined 
@@ -280,6 +509,7 @@ async function loadSceneAudio(scene: Scene) {
         audioStatus.textContent = 'Failed to load audio';
         audioStatus.className = 'audio-status error';
       }
+      eventSystem.dispatch({ type: 'AUDIO_STOPPED' });
     }
   } catch (error) {
     console.error('Error loading audio:', error);
@@ -287,53 +517,17 @@ async function loadSceneAudio(scene: Scene) {
       audioStatus.textContent = 'Audio error';
       audioStatus.className = 'audio-status error';
     }
+    eventSystem.dispatch({ type: 'AUDIO_STOPPED' });
+  } finally {
+    isAudioLoading = false;
+    console.log(`Audio loading completed for request ${requestId}`);
   }
 }
 
-function navigateScene(direction: number) {
-  if (!sceneManager) return;
-  
-  const newIndex = currentSceneIndex + direction;
-  const totalScenes = sceneManager.getTotalScenes();
-  
-  if (newIndex >= 1 && newIndex <= totalScenes) {
-    console.log(`Navigating from scene ${currentSceneIndex} to scene ${newIndex} - STOPPING ALL AUDIO`);
-    
-    // CRITICAL: Stop audio first and wait longer for cleanup
-    audioPlayer.stop();
-    
-    // Longer delay to ensure complete cleanup before starting new audio
-    setTimeout(() => {
-      console.log(`Starting scene ${newIndex} after cleanup delay`);
-      currentSceneIndex = newIndex;
-      displaySceneView();
-    }, 200);
-  }
-}
-
-function togglePlayPause() {
-  console.log('Toggle play/pause clicked, current state:', audioPlayer.getIsPlaying());
-  
-  if (audioPlayer.getIsPlaying()) {
-    audioPlayer.stop();
-    updatePlayPauseButton();
-  } else {
-    // Small delay to ensure stop() cleanup is complete
-    setTimeout(() => {
-      // Reload the current scene's audio
-      const scene = sceneManager?.getScene(currentSceneIndex);
-      if (scene) {
-        loadSceneAudio(scene);
-      }
-      updatePlayPauseButton();
-    }, 50);
-  }
-}
-
-function updatePlayPauseButton() {
+function updatePlayPauseButton(state: AppState) {
   const playPauseBtn = document.getElementById('play-pause-btn') as HTMLButtonElement;
   if (playPauseBtn) {
-    if (audioPlayer.getIsPlaying()) {
+    if (state.isPlaying) {
       playPauseBtn.textContent = '⏸ Pause';
       playPauseBtn.classList.add('playing');
     } else {
@@ -343,12 +537,20 @@ function updatePlayPauseButton() {
   }
 }
 
-// Keyboard navigation
+// Keyboard navigation using event system
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'ArrowLeft') {
-    navigateScene(-1);
-  } else if (event.key === 'ArrowRight') {
-    navigateScene(1);
+  if (!navigationInProgress) {
+    if (event.key === 'ArrowLeft') {
+      navigationInProgress = true;
+      console.log('Keyboard navigation: previous scene');
+      eventSystem.dispatch({ type: 'SCENE_NAVIGATE', direction: -1 });
+      setTimeout(() => { navigationInProgress = false; }, 300);
+    } else if (event.key === 'ArrowRight') {
+      navigationInProgress = true;
+      console.log('Keyboard navigation: next scene');
+      eventSystem.dispatch({ type: 'SCENE_NAVIGATE', direction: 1 });
+      setTimeout(() => { navigationInProgress = false; }, 300);
+    }
   }
 });
 
@@ -359,15 +561,13 @@ document.addEventListener('DOMContentLoaded', () => {
   if (app) {
     app.innerHTML = `
       <div class="container">
-        <h1>ShapeShifter</h1>
-        
+        <div id="scene-container"></div>
+
         <div class="file-input-container">
           <input type="file" id="file-input" accept=".dawproject">
           <label for="file-input" class="file-label">Choose DAWproject file</label>
           <span id="file-name">No file selected</span>
         </div>
-        
-        <div id="scene-container"></div>
       </div>
     `;
     

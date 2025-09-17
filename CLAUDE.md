@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ShapeShifter is a web application for analyzing pitch class sets in DAWproject files. It provides scene-based navigation through musical analysis with synchronized audio playback and visual pitch class set analysis.
+Shape shift is a web application for analyzing pitch class sets in DAWproject files. It provides scene-based navigation through musical analysis with synchronized audio playback and visual pitch class set analysis.
 
 ## Key Commands
 

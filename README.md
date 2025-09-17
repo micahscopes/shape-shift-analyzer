@@ -1,4 +1,4 @@
-# ShapeShifter
+# Shape shift
 
 A web application for analyzing pitch class sets in DAWproject files with synchronized audio playback.
 

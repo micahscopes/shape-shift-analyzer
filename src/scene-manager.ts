@@ -1,4 +1,4 @@
-import type { Track, Clip, SceneData, ClipSlot } from './dawproject-parser';
+import type { Track, Clip, SceneData } from './dawproject-parser';
 import { PitchClassSetAnalyzer } from './pitch-class-set';
 import type { PitchClassSet } from './pitch-class-set';
 

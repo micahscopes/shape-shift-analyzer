@@ -9,6 +9,8 @@ export class AudioPlayer {
   private audioBuffers: Map<string, AudioBuffer> = new Map();
   private stopRequested: boolean = false;
   private playerId: string;
+  private loopMode: 'loop' | 'once' = 'loop';
+  private onSegmentEnd?: () => void;
   
   constructor() {
     this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -42,10 +44,19 @@ export class AudioPlayer {
     }
   }
   
-  async playLoop(buffer: AudioBuffer | null, startTime?: number, endTime?: number): Promise<void> {
+  setLoopMode(mode: 'loop' | 'once', onSegmentEnd?: () => void): void {
+    this.loopMode = mode;
+    this.onSegmentEnd = onSegmentEnd;
+    console.log(`Audio player loop mode set to: ${mode}`);
+    
+    // Don't restart audio automatically - let the caller handle it
+    // This prevents overlapping audio issues
+  }
+
+  async playSegment(buffer: AudioBuffer | null, startTime?: number, endTime?: number): Promise<void> {
     if (!buffer) return;
     
-    console.log(`=== NEW PLAYBACK REQUEST (Player ${this.playerId}) ===`);
+    console.log(`=== NEW PLAYBACK REQUEST (Player ${this.playerId}) - Mode: ${this.loopMode} ===`);
     
     // FIRST: Stop everything and wait for cleanup
     this.stop();
@@ -77,7 +88,7 @@ export class AudioPlayer {
     }
     
     const clampedEndTime = Math.min(actualEndTime, buffer.duration);
-    this.playSegmentLoop(buffer, actualStartTime, clampedEndTime);
+    this.playSegmentWithMode(buffer, actualStartTime, clampedEndTime);
   }
   
   private playSimpleLoop(buffer: AudioBuffer): void {
@@ -102,11 +113,9 @@ export class AudioPlayer {
     console.log('Simple loop started');
   }
   
-  private playSegmentLoop(buffer: AudioBuffer, startTime: number, endTime: number): void {
-    console.log(`Playing segment loop: ${startTime}s to ${endTime}s`);
-    
-    // For segments, we need to create a looped buffer manually
-    // This is more complex but avoids the setTimeout recursion issue
+
+  private playSegmentWithMode(buffer: AudioBuffer, startTime: number, endTime: number): void {
+    console.log(`Playing segment with mode ${this.loopMode}: ${startTime}s to ${endTime}s`);
     
     const segmentDuration = endTime - startTime;
     const sampleRate = buffer.sampleRate;
@@ -133,15 +142,26 @@ export class AudioPlayer {
       }
     }
     
-    // Now play the segment buffer with native looping
+    // Create source with appropriate looping behavior
     this.currentSource = this.audioContext.createBufferSource();
     this.currentSource.buffer = segmentBuffer;
-    this.currentSource.loop = true;
+    this.currentSource.loop = this.loopMode === 'loop';
     
     // Create gain for volume control
     this.currentGain = this.audioContext.createGain();
     this.currentSource.connect(this.currentGain);
     this.currentGain.connect(this.audioContext.destination);
+    
+    // If mode is 'once', set up ended event
+    if (this.loopMode === 'once' && this.onSegmentEnd) {
+      this.currentSource.addEventListener('ended', () => {
+        console.log('Audio segment finished - calling onSegmentEnd');
+        this.isPlaying = false;
+        if (this.onSegmentEnd) {
+          this.onSegmentEnd();
+        }
+      });
+    }
     
     // Start immediately
     this.currentSource.start(0);
@@ -149,10 +169,11 @@ export class AudioPlayer {
     this.isPlaying = true;
     this.stopRequested = false;
     
-    console.log(`Segment loop started with ${segmentLength} samples`);
+    console.log(`Segment started with mode: ${this.loopMode}`);
   }
+
   
-  stop(): void {
+  async stop(): Promise<void> {
     console.log(`=== STOP REQUESTED (Player ${this.playerId}) ===`);
     
     // Set flags immediately
@@ -180,19 +201,14 @@ export class AudioPlayer {
       }
       
       // NUCLEAR OPTION: Suspend and resume audio context to kill any lingering sources
-      if (this.audioContext.state === 'running') {
+      if (this.audioContext.state !== 'suspended') {
         console.log('Suspending audio context for cleanup...');
-        this.audioContext.suspend().then(() => {
-          console.log('Audio context suspended');
-          // Resume immediately so it's ready for next playback
-          setTimeout(() => {
-            if (this.audioContext.state === 'suspended') {
-              this.audioContext.resume().then(() => {
-                console.log('Audio context resumed after cleanup');
-              });
-            }
-          }, 10);
-        });
+        await this.audioContext.suspend();
+        console.log('Audio context suspended');
+        // Resume immediately so it's ready for next playback
+        await new Promise(resolve => setTimeout(resolve, 10));
+        await this.audioContext.resume();
+        console.log('Audio context resumed after cleanup');
       }
       
     } catch (e) {
