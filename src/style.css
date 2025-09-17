@@ -1,0 +1,421 @@
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: 2.5em;
+  line-height: 1.1;
+  margin-bottom: 1rem;
+}
+
+#app {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.container {
+  text-align: left;
+}
+
+.file-input-container {
+  margin: 2rem 0;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+input[type="file"] {
+  display: none;
+}
+
+.file-label {
+  display: inline-block;
+  padding: 0.6em 1.2em;
+  background-color: #646cff;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.25s;
+}
+
+.file-label:hover {
+  background-color: #535bf2;
+}
+
+#file-name {
+  color: #888;
+  font-style: italic;
+}
+
+.track-section {
+  margin: 2rem 0;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+}
+
+.track-section h2 {
+  margin-top: 0;
+  color: #646cff;
+}
+
+.scene-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  margin: 2rem 0;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+}
+
+.nav-arrow {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: #646cff;
+  color: white;
+  font-size: 1.5em;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-arrow:hover:not(:disabled) {
+  background: #535bf2;
+  transform: scale(1.1);
+}
+
+.nav-arrow:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.scene-content {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+.scene-column {
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+}
+
+.reference-section h3,
+.shape-section h3 {
+  margin-top: 0;
+  color: #646cff;
+}
+
+.clip-name {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 0.5rem 0;
+}
+
+.clip-timing {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9em;
+}
+
+.audio-status {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  display: inline-block;
+  font-size: 0.9em;
+}
+
+.audio-status.loading {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.audio-status.playing {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.audio-status.no-audio {
+  background: rgba(158, 158, 158, 0.2);
+  color: #9e9e9e;
+}
+
+.audio-status.error {
+  background: rgba(244, 67, 54, 0.2);
+  color: #f44336;
+}
+
+.play-pause-btn {
+  margin-top: 1rem;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  background: #646cff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.play-pause-btn:hover {
+  background: #535bf2;
+  transform: scale(1.05);
+}
+
+.play-pause-btn.playing {
+  background: #4caf50;
+}
+
+.play-pause-btn.playing:hover {
+  background: #45a049;
+}
+
+.no-reference,
+.no-shape {
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+  padding: 2rem;
+  text-align: center;
+}
+
+.analysis-details {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: rgba(100, 108, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(100, 108, 255, 0.2);
+}
+
+.analysis-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(100, 108, 255, 0.1);
+}
+
+.analysis-row:last-child {
+  border-bottom: none;
+}
+
+.analysis-row .label {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.analysis-row .value {
+  font-family: 'Courier New', monospace;
+  color: #646cff;
+}
+
+.keyboard-container {
+  margin: 2rem 0;
+  padding: 1.5rem;
+  background: #1a1a1a;
+  border-radius: 8px;
+}
+
+.large-keyboard {
+  position: relative;
+  height: 150px;
+  width: 420px;
+  margin: 0 auto;
+}
+
+.white-keys {
+  display: flex;
+  gap: 2px;
+  height: 100%;
+}
+
+.black-keys {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 60%;
+  pointer-events: none;
+}
+
+.white-key {
+  flex: 1;
+  background: white;
+  border: 2px solid #ddd;
+  border-radius: 0 0 6px 6px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 10px;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.black-key {
+  position: absolute;
+  width: 40px;
+  height: 100%;
+  background: #333;
+  border: 2px solid #111;
+  border-radius: 0 0 4px 4px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 8px;
+  transition: all 0.2s;
+  pointer-events: all;
+  cursor: pointer;
+}
+
+.white-key.active {
+  background: linear-gradient(to bottom, #646cff, #535bf2);
+  border-color: #4444ff;
+  transform: translateY(2px);
+}
+
+.black-key.active {
+  background: linear-gradient(to bottom, #8888ff, #646cff);
+  border-color: #535bf2;
+  transform: translateY(2px);
+}
+
+.key-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.white-key.active .key-label {
+  color: white;
+}
+
+.black-key .key-label {
+  color: #aaa;
+  font-size: 12px;
+}
+
+.black-key.active .key-label {
+  color: white;
+}
+
+button.toggle-notes {
+  margin-top: 1rem;
+  padding: 0.4em 0.8em;
+  font-size: 0.9em;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.25s;
+}
+
+button.toggle-notes:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: white;
+}
+
+.notes-list {
+  margin-top: 1rem;
+  overflow-x: auto;
+}
+
+.notes-list table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85em;
+}
+
+.notes-list th,
+.notes-list td {
+  padding: 0.4em;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.notes-list th {
+  background: rgba(100, 108, 255, 0.1);
+  font-weight: 600;
+}
+
+.notes-list tr:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  
+  .track-section {
+    background: rgba(0, 0, 0, 0.03);
+  }
+  
+  .clip {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.1);
+  }
+  
+  .clip-info p {
+    color: rgba(0, 0, 0, 0.7);
+  }
+  
+  .keyboard-viz {
+    background: #f0f0f0;
+  }
+  
+  .key {
+    border-color: #ccc;
+  }
+  
+  button.toggle-notes {
+    background-color: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.8);
+  }
+  
+  button.toggle-notes:hover {
+    background-color: rgba(0, 0, 0, 0.08);
+    border-color: rgba(0, 0, 0, 0.2);
+    color: black;
+  }
+  
+  .notes-list th,
+  .notes-list td {
+    border-bottom-color: rgba(0, 0, 0, 0.1);
+  }
+  
+  .notes-list tr:hover {
+    background: rgba(0, 0, 0, 0.03);
+  }
+}
